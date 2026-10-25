@@ -1,0 +1,17 @@
+# Customer data and secrets never go in this (public) repository
+.env
+.env.*
+deploy/env.yaml
+_debug/
+reports/
+dist/
+tests/expected/
+tests/private/
+*.zip
+.neon
+# Python / Node
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+node_modules/

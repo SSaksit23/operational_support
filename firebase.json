@@ -1,0 +1,11 @@
+{
+  "hosting": {
+    "public": "deploy/public",
+    "rewrites": [
+      { "source": "**", "run": { "serviceId": "ops-agent", "region": "asia-southeast1" } }
+    ],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+    ]
+  }
+}

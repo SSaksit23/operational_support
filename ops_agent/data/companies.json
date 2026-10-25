@@ -1,0 +1,33 @@
+{
+  "_note": "Billing entities for receipts and tax invoices, as given by Saksit on 2026-10-24. Typos fixed: 'เเ' (two sara e) -> 'แ' in Go 365 TH, 'ภาษีอาการ' -> 'ภาษีอากร' in QE Booking TH. logo_sha256 identifies the company logo already embedded in the TL expense template (only Go 365 has one there). Unconfirmed: 2U Center แขวง (รัชดาภิเษก here; the example TL message says ดินแดง).",
+  "companies": [
+    {"id": "2ucenter-th", "company": "2U Center", "lang": "th", "tax_id": "0105569012582", "branch": "สำนักงานใหญ่",
+     "lines": ["บริษัท 2ยูเซ็นเตอร์ จำกัด สำนักงานใหญ่",
+               "เลขที่ 275/5, 275/6, 275/7 อาคารซี ชั้น3",
+               "ถนนรัชดาภิเษก แขวงรัชดาภิเษก เขตดินแดง กรุงเทพมหานคร 10400",
+               "เลขประจำตัวผู้เสียภาษีอากร 0105569012582"]},
+    {"id": "go365-en", "company": "Go 365 Travel", "lang": "en", "tax_id": "0105557086021", "branch": "00001",
+     "logo_sha256": "02e1d7624a229fa23cc4bbf45f7caf10a6b60de914b086e1e230a9af13892a8f",
+     "lines": ["Go 365 Travel Co.,Ltd. (00001)",
+               "275/6 C Building, 5th Fl., Ratchadaphisek Rd., Din Daeng, Bangkok 10400",
+               "TAX ID : 0105557086021"]},
+    {"id": "go365-th", "company": "Go 365 Travel", "lang": "th", "tax_id": "0105557086021", "branch": "00001",
+     "logo_sha256": "02e1d7624a229fa23cc4bbf45f7caf10a6b60de914b086e1e230a9af13892a8f",
+     "lines": ["บริษัท โก365ทราเวล จำกัด",
+               "เลขทะเบียนนิติบุคคล: 0105557086021",
+               "สำนักงานสาขา เลขที่ (00001)",
+               "ที่อยู่ : เลขที่ 275/6 อาคารซี ชั้นที่ 5 ห้องเอ ถนนรัชดาภิเษก แขวงรัชดาภิเษก เขตดินแดง กทม 10400"]},
+    {"id": "qebooking-en", "company": "QE Booking", "lang": "en", "tax_id": "0835547011102", "branch": "Head office",
+     "lines": ["QEBOOKING CO., LTD.",
+               "No. 275/5, 275/6, 275/7, Building C, 4th Floor, Ratchadaphisek Road, Ratchadaphisek Subdistrict, Din Daeng District, Bangkok 10400",
+               "TAX ID : 0835547011102"]},
+    {"id": "qebooking-th", "company": "QE Booking", "lang": "th", "tax_id": "0835547011102", "branch": "สำนักงานใหญ่",
+     "lines": ["บริษัท คิวอี บุ๊คกิ้ง จำกัด สำนักงานใหญ่",
+               "เลขที่ผู้เสียภาษีอากร 0835547011102",
+               "เลขที่ 275/5-7 อาคาร ซี ชั้นที่ 4 ถนน รัชดาภิเษก แขวงรัชดาภิเษก เขตดินแดง กรุงเทพมหานคร 10400"]},
+    {"id": "teetiew-th", "company": "ที่เที่ยว", "lang": "th", "tax_id": "0105559192201", "branch": "สำนักงานใหญ่",
+     "lines": ["บริษัท ที่เที่ยว จำกัด ( สำนักงานใหญ่ )",
+               "เลขที่ 275/5,275/6,275/7 อาคาร ซี ชั้นที่ 3 ถนนรัชดาภิเษก แขวงรัชดาภิเษก เขตดินแดง กรุงเทพมหานคร 10400",
+               "เลขประจำตัวผู้เสียภาษีอากร 0-1055-59192-20-1"]}
+  ]
+}

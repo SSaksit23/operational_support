@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ops Support Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">Ops Support Agent <span>ผู้ช่วยฝ่ายปฏิบัติการ</span></div>
+  <nav>
+    <button class="tab active" data-view="work">ตรวจกรุ๊ป <small>Check a group</small></button>
+    <button class="tab" data-view="internal">ตรวจพาสปอร์ต <small>Internal check</small></button>
+    <button class="tab" data-view="search">ค้นหา <small>Search</small></button>
+  </nav>
+  <div class="user"><span id="who"></span> <button id="btn-signout" class="hidden">ออกจากระบบ</button></div>
+</header>
+
+<div id="signin" class="signin hidden">
+  <div class="card">
+    <h2>เข้าสู่ระบบ <small>Sign in</small></h2>
+    <p class="muted">ใช้บัญชี Google ของบริษัท · Use your company Google account</p>
+    <button id="btn-signin" class="primary">Sign in with Google</button>
+    <p id="signin-msg" class="err"></p>
+  </div>
+</div>
+
+<main id="work" class="view">
+  <section class="card" id="step-upload">
+    <h2><b>1</b> อัปโหลดเอกสาร <small>Upload documents</small></h2>
+    <label class="drop" id="drop">
+      <input type="file" id="files" multiple hidden>
+      <strong>ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</strong>
+      <span>Name list (xlsx), ใบนัดหมาย (pdf), E-ticket (pdf), PNR (docx), ใบเบิก TL (xlsx), Land confirmation</span>
+    </label>
+    <ul id="picked" class="files"></ul>
+    <div class="row">
+      <button id="btn-check" class="primary" disabled>ตรวจเอกสาร <small>Run checks</small></button>
+      <span id="check-status" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card hidden" id="step-checks">
+    <h2><b>2</b> ผลการตรวจ <small>Review checks</small></h2>
+    <div id="group-summary" class="summary"></div>
+    <div id="docs"></div>
+    <div id="land"></div>
+    <div class="approver row">
+      <label>ชื่อผู้อนุมัติ <small>Approver</small> <input id="approver" placeholder="ชื่อของคุณ"></label>
+      <span id="gate" class="gate"></span>
+    </div>
+    <div id="findings"></div>
+    <div class="row">
+      <button id="fix-namelist" class="hidden">ดาวน์โหลดรายชื่อที่แก้แล้ว <small>Corrected name list (xlsx)</small></button>
+      <span id="fix-status" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card hidden" id="step-message">
+    <h2><b>3</b> ข้อความมอบหมายงาน TL <small>TL assignment message</small></h2>
+    <div class="grid">
+      <label>บริษัท <small>Company</small> <select id="msg-company"></select></label>
+      <label>วันที่ส่ง <small>Send date</small> <input type="date" id="msg-today"></label>
+      <label>ทิปไกด์/ท่าน (บาท) <small>Tip per pax</small> <input type="number" id="msg-tip" placeholder="ไม่ระบุ"></label>
+      <label>งบของฝาก/ท่าน (บาท) <small>Gift budget</small> <input type="number" id="msg-gift" value="35"></label>
+      <label>ชื่อ LINE ผู้ส่ง <small>Your LINE name</small> <input id="msg-line" placeholder="[ชื่อ LINE ของเรา]"></label>
+      <label>คำลงท้าย <small>Particle</small> <select id="msg-particle"><option>ครับ</option><option>ค่ะ</option></select></label>
+    </div>
+    <div class="row">
+      <button id="btn-draft" class="primary">ร่างข้อความ <small>Draft</small></button>
+      <span id="draft-status" class="muted"></span>
+    </div>
+    <div id="msg-area" class="hidden">
+      <textarea id="msg-text" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="btn-review">ตรวจข้อความที่แก้ <small>Check edits</small></button>
+        <button id="btn-copy" class="primary">คัดลอก <small>Copy</small></button>
+        <span id="copy-status" class="muted"></span>
+      </div>
+      <div id="claims"></div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="step-workbook">
+    <h2><b>4</b> ใบเบิกค่าใช้จ่าย TL <small>TL expense workbook</small></h2>
+    <p class="muted">เลือกบริษัทของแต่ละเอกสาร หัวกระดาษและเลขผู้เสียภาษีจะเปลี่ยนตาม ในไฟล์ Excel ยังเปลี่ยนได้จากชีต "เลือกบริษัท"</p>
+    <div id="roles" class="grid"></div>
+    <div class="row">
+      <button id="btn-workbook" class="primary">ดาวน์โหลดไฟล์ <small>Download xlsx</small></button>
+      <span id="wb-status" class="muted"></span>
+    </div>
+  </section>
+
+  <section class="card hidden" id="step-save">
+    <h2><b>5</b> บันทึกกรุ๊ป <small>Save to group database</small></h2>
+    <p class="muted">เก็บข้อมูลกรุ๊ปและผลตรวจไว้ค้นหาภายหลัง เลขพาสปอร์ตและบัตรประชาชนถูกเข้ารหัส</p>
+    <div class="row"><button id="btn-save">บันทึก <small>Save</small></button><span id="save-status" class="muted"></span></div>
+  </section>
+</main>
+
+<main id="internal" class="view hidden">
+  <section class="card">
+    <h2>ตรวจพาสปอร์ต รายชื่อ และใบนัดหมาย <small>Internal check · ops team only</small></h2>
+    <p class="muted">อัปโหลดพาสปอร์ต (รูปหรือ PDF), รายชื่อลูกค้า (xlsx) และใบนัดหมาย (pdf) ระบบจะเทียบทีละคน: ชื่อ เลขพาสปอร์ต วันเกิด วันหมดอายุ เพศ และอายุพาสปอร์ตต้องเหลือ 6 เดือนนับจากวันกลับ</p>
+    <label class="drop" id="i-drop">
+      <input type="file" id="i-files" multiple hidden>
+      <strong>ลากไฟล์มาวาง หรือคลิกเพื่อเลือก</strong>
+      <span>Passport (jpg/png/pdf), Name list (xlsx), ใบนัดหมาย (pdf)</span>
+    </label>
+    <ul id="i-picked" class="files"></ul>
+    <div class="row">
+      <button id="i-check" class="primary" disabled>ตรวจ <small>Run check</small></button>
+      <span id="i-status" class="muted"></span>
+    </div>
+  </section>
+  <section class="card hidden" id="i-result">
+    <div id="i-summary" class="summary"></div>
+    <div id="i-docs"></div>
+    <div id="i-table"></div>
+    <div id="i-extra"></div>
+    <div id="i-findings" class="readonly"></div>
+  </section>
+</main>
+
+<main id="search" class="view hidden">
+  <section class="card">
+    <h2>ค้นหากรุ๊ปที่บันทึกไว้ <small>Search saved groups</small></h2>
+    <div class="grid">
+      <label class="wide">คำค้น <small>Query</small> <input id="q" placeholder="เช่น Rezen Kingtown, ขอห้องไม่สูบบุหรี่, HU423"></label>
+      <label>ประเภท <small>Kind</small>
+        <select id="q-kind"><option value="">ทั้งหมด</option><option value="group">กรุ๊ป</option><option value="person">ลูกค้า</option>
+          <option value="hotel">โรงแรม</option><option value="contact">ผู้ติดต่อ</option><option value="meeting">นัดหมาย</option>
+          <option value="optional_tour">Optional tour</option><option value="finding">ผลตรวจ</option><option value="page">หน้าเอกสาร</option></select></label>
+      <label>รหัสกรุ๊ป <small>Tour code</small> <input id="q-group"></label>
+    </div>
+    <div class="row"><button id="btn-search" class="primary">ค้นหา <small>Search</small></button><span id="search-status" class="muted"></span></div>
+    <div id="hits"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

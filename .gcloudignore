@@ -1,0 +1,6 @@
+*
+!ops_agent/**
+!requirements.txt
+!Dockerfile
+!.dockerignore
+**/__pycache__/
