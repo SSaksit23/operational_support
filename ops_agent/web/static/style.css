@@ -96,3 +96,5 @@ table.cmp button { padding: 3px 10px; font-size: 13px; }
 .itable td.differs { background: var(--bad-bg); color: var(--bad); }
 .itable td.warn { background: var(--warn-bg); color: var(--warn); }
 .itable tr.has-problem td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+
+.credit { text-align: center; color: var(--muted, #888); font-size: 13px; padding: 24px 16px 32px; }
