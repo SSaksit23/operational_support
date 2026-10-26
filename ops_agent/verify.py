@@ -583,12 +583,32 @@ def check_optional_tours(b: GroupBundle, s: Settings) -> list[Finding]:
 
 # ---------------------------------------------------------------- passports and people
 
-def _scan_for(p: Passenger, scans):
-    by_no = next((sc for sc in scans if sc.passport_no and p.passport_no and sc.passport_no == p.passport_no.upper()), None)
-    if by_no:
-        return by_no
-    key = _letters(p.airline_name)
-    return next((sc for sc in scans if SequenceMatcher(None, _letters(sc.airline_name), key).ratio() >= 0.85), None)
+def match_scans(passengers, scans, min_ratio: float = 0.8) -> dict:
+    """Pair travellers with passport scans one to one: by passport number first, then by
+    the closest name. A scan is never given to two people (sisters share a surname)."""
+    out, used = {}, set()
+    for p in passengers:
+        if not p.passport_no:
+            continue
+        hit = next((sc for sc in scans if id(sc) not in used and sc.passport_no == p.passport_no.upper()), None)
+        if hit:
+            out[id(p)] = hit
+            used.add(id(hit))
+    pairs = []
+    for p in passengers:
+        if id(p) in out:
+            continue
+        key = _letters(p.airline_name)
+        for sc in scans:
+            if id(sc) not in used:
+                r = SequenceMatcher(None, _letters(sc.airline_name), key).ratio()
+                if r >= min_ratio:
+                    pairs.append((r, id(p), sc))
+    for r, pid, sc in sorted(pairs, key=lambda t: -t[0]):
+        if pid not in out and id(sc) not in used:
+            out[pid] = sc
+            used.add(id(sc))
+    return out
 
 
 def check_passport_scans(b: GroupBundle, s: Settings) -> list[Finding]:
@@ -605,8 +625,9 @@ def check_passport_scans(b: GroupBundle, s: Settings) -> list[Finding]:
     for d in b.etickets:
         for tk in d.tickets:
             tickets.setdefault(tk.passenger_name, tk)
+    pairs = match_scans(nl.passengers, scans)
     for p in nl.passengers:
-        sc = _scan_for(p, scans)
+        sc = pairs.get(id(p))
         if not sc:
             continue
         matched.add(id(sc))
@@ -652,7 +673,7 @@ def check_passport_scans(b: GroupBundle, s: Settings) -> list[Finding]:
                            title=f"{len(extra)} passport(s) not on the name list",
                            detail="\n".join(f"{sc.airline_name} {sc.passport_no or ''} ({sc.source.location})" for sc in extra),
                            evidence=[sc.source for sc in extra]))
-    no_scan = [p for p in nl.passengers if not _scan_for(p, scans)]
+    no_scan = [p for p in nl.passengers if id(p) not in pairs]
     if no_scan:
         out.append(Finding(rule="passports.missing", verdict=Verdict.INFO,
                            title=f"{len(no_scan)} traveller(s) without a passport scan",
@@ -670,8 +691,8 @@ def check_passports(b: GroupBundle, s: Settings) -> list[Finding]:
         return []
     limit = nl.end_date + timedelta(days=round(s.passport_min_months * 30.5))
     # Expiry from the name list, or from the passport scan when the list has none.
-    expiry = {id(p): p.passport_expiry or (getattr(_scan_for(p, b.passports), "expiry", None) if b.passports else None)
-              for p in nl.passengers}
+    pairs = match_scans(nl.passengers, b.passports)
+    expiry = {id(p): p.passport_expiry or getattr(pairs.get(id(p)), "expiry", None) for p in nl.passengers}
     short = [p for p in nl.passengers if expiry[id(p)] and expiry[id(p)] < limit]
     missing = [p for p in nl.passengers if not expiry[id(p)]]
     if short or missing:

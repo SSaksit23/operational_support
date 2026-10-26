@@ -8,13 +8,12 @@ against the trip dates from the preparation letter (6-month validity rule).
 from __future__ import annotations
 
 from datetime import date, timedelta
-from difflib import SequenceMatcher
 from typing import Optional
 
 from pydantic import BaseModel
 
 from .models import GroupBundle, Passenger, PassportScan
-from .verify import Settings, _letters
+from .verify import Settings, _letters, match_scans
 
 RULES = ("passports.", "dates.", "flights.", "hotels.", "people.", "pax.", "passengers.spelling")
 
@@ -35,16 +34,6 @@ class Row(BaseModel):
     expiry_status: str  # ok | short | expired | unknown
     expiry_note: str
     problems: int
-
-
-def _scan_for(p: Passenger, scans: list[PassportScan]) -> Optional[PassportScan]:
-    if p.passport_no:
-        hit = next((s for s in scans if s.passport_no and s.passport_no == p.passport_no.upper()), None)
-        if hit:
-            return hit
-    key = _letters(p.airline_name)
-    best = max(scans, key=lambda s: SequenceMatcher(None, _letters(s.airline_name), key).ratio(), default=None)
-    return best if best and SequenceMatcher(None, _letters(best.airline_name), key).ratio() >= 0.8 else None
 
 
 def _sex(p: Passenger) -> Optional[str]:
@@ -79,8 +68,9 @@ def build_rows(b: GroupBundle, s: Settings = Settings()) -> list[Row]:
     end = trip_end(b)
     limit = end + timedelta(days=round(s.passport_min_months * 30.5)) if end else None
     rows = []
+    pairs = match_scans(b.name_list.passengers, b.passports)
     for p in b.name_list.passengers:
-        sc = _scan_for(p, b.passports)
+        sc = pairs.get(id(p))
         unread = bool(sc and not sc.checks_ok)
         cells = [
             _cell("name", p.airline_name, sc and sc.airline_name),
@@ -111,5 +101,5 @@ def build_rows(b: GroupBundle, s: Settings = Settings()) -> list[Row]:
 def extra_scans(b: GroupBundle) -> list[PassportScan]:
     if not b.name_list:
         return list(b.passports)
-    used = {id(_scan_for(p, b.passports)) for p in b.name_list.passengers}
+    used = {id(sc) for sc in match_scans(b.name_list.passengers, b.passports).values()}
     return [s for s in b.passports if id(s) not in used]
