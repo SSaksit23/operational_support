@@ -297,7 +297,7 @@ function iAdd(list) {
   $("i-picked").querySelectorAll(".rm").forEach((b) => b.addEventListener("click", () => { ipicked.splice(+b.dataset.i, 1); iAdd([]); }));
   $("i-check").disabled = !ipicked.length;
 }
-const FIELD = { name: "ชื่อ · Name", passport_no: "เลขพาสปอร์ต", dob: "วันเกิด · DOB", expiry: "หมดอายุ · Expiry", sex: "เพศ · Sex" };
+const FIELD = { name: "ชื่อ · Name", passport_no: "เลขพาสปอร์ต", dob: "วันเกิด · DOB", expiry: "หมดอายุ · Expiry", sex: "เพศ · Sex", ticket: "ตั๋ว · Ticket" };
 const EXP = { ok: ["ok", "ผ่าน"], short: ["bad", "ไม่ถึง 6 เดือน"], expired: ["bad", "หมดอายุ"], unknown: ["info", "ไม่ทราบ"] };
 $("i-check").addEventListener("click", async () => {
   const fd = new FormData();
@@ -316,13 +316,16 @@ async function showInternal(s) {
   const bad = d.rows.filter((r) => r.problems).length;
   $("i-summary").innerHTML = [
     ["ผู้เดินทาง · Travellers", d.rows.length], ["พาสปอร์ตที่อ่านได้ · Passports read", d.has.passports],
-    ["มีปัญหา · With problems", bad], ["วันกลับ · Return", d.trip_end || "ไม่ทราบ"],
+    ["ตั๋วที่อ่านได้ · Tickets read", d.has.tickets], ["มีปัญหา · With problems", bad], ["วันกลับ · Return", d.trip_end || "ไม่ทราบ"],
   ].map(([k, v]) => `<div><b>${k}</b>${esc(v)}</div>`).join("");
-  const miss = [!d.has.name_list && "รายชื่อลูกค้า", !d.has.prep_letter && "ใบนัดหมาย", !d.has.passports && "พาสปอร์ต"].filter(Boolean);
+  const miss = [!d.has.name_list && "รายชื่อลูกค้า", !d.has.prep_letter && "ใบนัดหมาย", !d.has.passports && "พาสปอร์ต", !d.has.tickets && "ตั๋ว / PNR"].filter(Boolean);
   $("i-docs").innerHTML = `<div class="table-wrap"><table><tr><th>ไฟล์</th><th>อ่านเป็น</th><th></th></tr>` +
     s.documents.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.label)}</td><td>${x.read ? '<span class="chip ok">อ่านแล้ว</span>' : `<span class="chip bad">อ่านไม่ได้</span> <small>${esc(x.note || "")}</small>`}</td></tr>`).join("") +
     "</table></div>" + (miss.length ? `<div class="missing">ยังไม่มี: ${miss.join(", ")}</div>` : "");
-  const cell = (c) => c.status === "ok" ? `<td class="ok">${esc(c.passport)}</td>`
+  const cell = (c) => c.field === "ticket" && c.status === "none" ? `<td class="muted">–</td>`
+    : c.field === "ticket" && c.status === "missing" ? `<td class="differs"><b>ไม่พบตั๋ว</b></td>`
+    : c.field === "ticket" && c.status === "differ" ? `<td class="differs"><b>${esc(c.passport)}</b><br><small>รายชื่อ: ${esc(c.name_list)}</small></td>`
+    : c.status === "ok" ? `<td class="ok">${esc(c.passport)}</td>`
     : c.status === "differ" ? `<td class="differs"><b>${esc(c.passport)}</b><br><small>รายชื่อ: ${esc(c.name_list)}</small></td>`
     : c.status === "unread" ? `<td class="warn">อ่านไม่ชัด<br><small>รายชื่อ: ${esc(c.name_list || "–")}</small></td>`
     : `<td class="muted">${esc(c.name_list || "–")}${c.passport ? "" : "<br><small>ไม่มีในพาสปอร์ต</small>"}</td>`;
@@ -331,8 +334,9 @@ async function showInternal(s) {
       r.cells.map(cell).join("") + `<td><span class="chip ${EXP[r.expiry_status][0]}">${EXP[r.expiry_status][1]}</span><br><small>${esc(r.expiry_note)}</small></td></tr>`).join("") +
     "</table></div>" : `<div class="missing">ต้องมีรายชื่อลูกค้าเพื่อเทียบทีละคน</div>`;
   $("i-extra").innerHTML = d.extra_scans.length ? `<div class="missing">พาสปอร์ตที่ไม่มีในรายชื่อ: ${d.extra_scans.map((x) => esc(`${x.name} ${x.passport_no || ""} (${x.file})`)).join(", ")}</div>` : "";
+  if (d.extra_tickets.length) $("i-extra").innerHTML += `<div class="missing">ตั๋วที่ไม่มีในรายชื่อ: ${d.extra_tickets.map((x) => esc(`${x.name} ${x.ticket_no || ""} (${x.file})`)).join(", ")}</div>`;
   const fs = d.finding_ids.map((i) => s.findings[i]).filter((f) => f.verdict !== "verified");
-  $("i-findings").innerHTML = fs.length ? `<div class="group-h">รายชื่อ × ใบนัดหมาย · Name list vs preparation letter</div>` + fs.map(findingHTML).join("") : "";
+  $("i-findings").innerHTML = fs.length ? `<div class="group-h">รายชื่อ × ใบนัดหมาย × ตั๋ว · Name list vs preparation letter and tickets</div>` + fs.map(findingHTML).join("") : "";
   $("i-result").classList.remove("hidden");
   $("i-result").scrollIntoView({ behavior: "smooth" });
 }

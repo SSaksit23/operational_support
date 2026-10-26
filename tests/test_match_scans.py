@@ -29,3 +29,19 @@ def test_passport_number_wins():
     a = _pax(given_name="ONE", surname="TESTER", passport_no="AA0000001")
     sc = _scan("TESTER", "ONX", "AA0000001")
     assert match_scans([a], [sc]) == {id(a): sc}
+
+
+def test_ticket_column():
+    from ops_agent.internal_check import build_rows, extra_tickets
+    from ops_agent.models import ETicketDoc, GroupBundle, NameListDoc, Ticket
+    tsrc = SourceRef(file="t.pdf", doc_type=DocType.ETICKET, location="page 1")
+    a, b = _pax(given_name="ONE", surname="TESTER"), _pax(given_name="TWO", surname="TESTER")
+    bundle = GroupBundle(
+        name_list=NameListDoc(tour_code="TEST1", passengers=[a, b], source=SRC),
+        etickets=[ETicketDoc(tickets=[Ticket(passenger_name="TESTER/ONE", ticket_no="000111", source=tsrc),
+                                      Ticket(passenger_name="OTHER/PERSON", ticket_no="000222", source=tsrc)],
+                             source=tsrc)])
+    rows = build_rows(bundle)
+    assert [r.cells[-1].status for r in rows] == ["ok", "missing"]
+    assert rows[1].problems >= 1
+    assert [t.name for t in extra_tickets(bundle)] == ["OTHER/PERSON"]

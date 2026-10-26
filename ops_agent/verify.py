@@ -590,7 +590,8 @@ def match_scans(passengers, scans, min_ratio: float = 0.8) -> dict:
     for p in passengers:
         if not p.passport_no:
             continue
-        hit = next((sc for sc in scans if id(sc) not in used and sc.passport_no == p.passport_no.upper()), None)
+        hit = next((sc for sc in scans if id(sc) not in used and sc.passport_no
+                    and sc.passport_no.upper() == p.passport_no.upper()), None)
         if hit:
             out[id(p)] = hit
             used.add(id(hit))
@@ -601,7 +602,7 @@ def match_scans(passengers, scans, min_ratio: float = 0.8) -> dict:
         key = _letters(p.airline_name)
         for sc in scans:
             if id(sc) not in used:
-                r = SequenceMatcher(None, _letters(sc.airline_name), key).ratio()
+                r = SequenceMatcher(None, _letters(getattr(sc, "airline_name", None) or sc.name), key).ratio()
                 if r >= min_ratio:
                     pairs.append((r, id(p), sc))
     for r, pid, sc in sorted(pairs, key=lambda t: -t[0]):

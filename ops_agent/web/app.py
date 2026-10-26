@@ -242,16 +242,19 @@ class Approval(BaseModel):
 @app.get("/api/sessions/{sid}/internal")
 def internal(sid: str):
     """Internal check: one row per traveller (name list x passport x trip dates), plus the related findings."""
-    from ..internal_check import RULES, build_rows, extra_scans, trip_end
+    from ..internal_check import RULES, build_rows, extra_scans, extra_tickets, tickets, trip_end
     s = _session(sid)
     b = s.bundle
     return {
         "session": sid,
         "trip_end": trip_end(b),
-        "has": {"name_list": bool(b.name_list), "prep_letter": bool(b.prep_letter), "passports": len(b.passports)},
+        "has": {"name_list": bool(b.name_list), "prep_letter": bool(b.prep_letter), "passports": len(b.passports),
+                "tickets": len(tickets(b))},
         "rows": [r.model_dump() for r in build_rows(b)],
         "extra_scans": [{"name": x.airline_name, "passport_no": x.passport_no, "file": f"{x.source.file} {x.source.location}"}
                         for x in extra_scans(b)],
+        "extra_tickets": [{"name": t.name, "ticket_no": t.ticket_no, "file": f"{t.source.file} {t.source.location or ''}".strip()}
+                          for t in extra_tickets(b)],
         "finding_ids": [i for i, f in enumerate(s.findings) if f.rule.startswith(RULES)],
     }
 

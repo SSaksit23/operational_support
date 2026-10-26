@@ -12,10 +12,10 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from .models import GroupBundle, Passenger, PassportScan
+from .models import GroupBundle, Passenger, PassportScan, SourceRef
 from .verify import Settings, _letters, match_scans
 
-RULES = ("passports.", "dates.", "flights.", "hotels.", "people.", "pax.", "passengers.spelling")
+RULES = ("passports.", "dates.", "flights.", "hotels.", "people.", "pax.", "passengers.")
 
 
 class Cell(BaseModel):
@@ -34,6 +34,44 @@ class Row(BaseModel):
     expiry_status: str  # ok | short | expired | unknown
     expiry_note: str
     problems: int
+
+
+class TicketRef(BaseModel):
+    name: str
+    ticket_no: Optional[str] = None
+    passport_no: Optional[str] = None
+    source: SourceRef
+
+
+def tickets(b: GroupBundle) -> list[TicketRef]:
+    """Tickets from the e-tickets, plus PNR names that have no e-ticket (one entry per name)."""
+    out: dict[str, TicketRef] = {}
+    for d in b.etickets:
+        for t in d.tickets:
+            out.setdefault(_letters(t.passenger_name), TicketRef(name=t.passenger_name, ticket_no=t.ticket_no,
+                                                               passport_no=t.passport_no, source=t.source))
+    for d in b.pnrs:
+        for t in d.passengers:
+            ref = out.get(_letters(t.name))
+            if ref is None:
+                out[_letters(t.name)] = TicketRef(name=t.name, ticket_no=t.ticket_no, source=t.source)
+            elif not ref.ticket_no:
+                ref.ticket_no = t.ticket_no
+    return list(out.values())
+
+
+def _ticket_cell(p: Passenger, t: Optional[TicketRef], have_tickets: bool) -> Cell:
+    if not have_tickets:
+        return Cell(field="ticket", name_list=p.airline_name, status="none")
+    if t is None:
+        return Cell(field="ticket", name_list=p.airline_name, status="missing")
+    label = t.name + (f" · {t.ticket_no}" if t.ticket_no else " · ไม่มีเลขตั๋ว")
+    same = _letters(t.name) == _letters(p.airline_name)
+    pno_ok = not (t.passport_no and p.passport_no) or t.passport_no.upper() == p.passport_no.upper()
+    status = "ok" if same and pno_ok and t.ticket_no else "differ"
+    if not pno_ok:
+        label += f" · พาสปอร์ตในตั๋ว {t.passport_no}"
+    return Cell(field="ticket", name_list=p.airline_name, passport=label, status=status)
 
 
 def _sex(p: Passenger) -> Optional[str]:
@@ -69,6 +107,8 @@ def build_rows(b: GroupBundle, s: Settings = Settings()) -> list[Row]:
     limit = end + timedelta(days=round(s.passport_min_months * 30.5)) if end else None
     rows = []
     pairs = match_scans(b.name_list.passengers, b.passports)
+    tks = tickets(b)
+    tpairs = match_scans(b.name_list.passengers, tks)
     for p in b.name_list.passengers:
         sc = pairs.get(id(p))
         unread = bool(sc and not sc.checks_ok)
@@ -82,6 +122,7 @@ def build_rows(b: GroupBundle, s: Settings = Settings()) -> list[Row]:
         if not sc:
             for c in cells:
                 c.status = "missing"
+        cells.append(_ticket_cell(p, tpairs.get(id(p)), bool(tks)))
         expiry = (sc and sc.expiry) or p.passport_expiry
         if not expiry or not limit:
             st, note = "unknown", "ไม่ทราบวันหมดอายุหรือวันกลับ" if not expiry else "ไม่ทราบวันกลับ"
@@ -91,7 +132,7 @@ def build_rows(b: GroupBundle, s: Settings = Settings()) -> list[Row]:
             st, note = "short", f"หมดอายุ {expiry} เหลือไม่ถึง {s.passport_min_months} เดือนนับจากวันกลับ {end}"
         else:
             st, note = "ok", f"หมดอายุ {expiry}"
-        problems = sum(c.status in ("differ", "unread") for c in cells) + (st in ("short", "expired")) + (sc is None)
+        problems = sum(c.status in ("differ", "unread") or c.field == "ticket" and c.status == "missing" for c in cells) + (st in ("short", "expired")) + (sc is None)
         rows.append(Row(no=p.no, name_th=" ".join(x for x in (p.given_name_th, p.surname_th) if x) or None,
                         name_en=p.airline_name, passport_file=sc and f"{sc.source.file} {sc.source.location}",
                         cells=cells, expiry_status=st, expiry_note=note, problems=problems))
@@ -103,3 +144,11 @@ def extra_scans(b: GroupBundle) -> list[PassportScan]:
         return list(b.passports)
     used = {id(sc) for sc in match_scans(b.name_list.passengers, b.passports).values()}
     return [s for s in b.passports if id(s) not in used]
+
+
+def extra_tickets(b: GroupBundle) -> list[TicketRef]:
+    tks = tickets(b)
+    if not b.name_list:
+        return tks
+    used = {id(t) for t in match_scans(b.name_list.passengers, tks).values()}
+    return [t for t in tks if id(t) not in used]
