@@ -124,6 +124,29 @@ def find_mrz(lines: list[str], source: SourceRef) -> list[PassportScan]:
 _ocr = None
 
 
+def _limit_threads(threads: int) -> None:
+    try:
+        import onnxruntime as ort
+    except ImportError:  # pragma: no cover
+        return
+    base = getattr(ort, "_ops_base_session_options", None) or ort.SessionOptions
+
+    def limited():
+        o = base()
+        o.intra_op_num_threads = threads
+        o.inter_op_num_threads = 1
+        return o
+    ort._ops_base_session_options = base
+    ort.SessionOptions = limited
+    import sys
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("rapidocr_onnxruntime") and getattr(mod, "SessionOptions", None) is base:
+            try:
+                mod.SessionOptions = limited
+            except Exception:  # pragma: no cover
+                pass
+
+
 def _engine():
     global _ocr
     if _ocr is None:
@@ -134,16 +157,9 @@ def _engine():
         threads = int(os.environ.get("OPS_OCR_THREADS") or 0)
         if threads:
             # Leave CPU free for other requests: on Cloud Run a fully busy instance is
-            # treated as overloaded and new requests are refused (429).
-            from rapidocr_onnxruntime import utils as ocr_utils
-            base = ocr_utils.SessionOptions
-
-            def limited():
-                o = base()
-                o.intra_op_num_threads = threads
-                o.inter_op_num_threads = 1
-                return o
-            ocr_utils.SessionOptions = limited
+            # treated as overloaded and new requests are refused (429). Best effort only:
+            # rapidocr versions differ in where they build SessionOptions.
+            _limit_threads(threads)
         _ocr = RapidOCR()
     return _ocr
 

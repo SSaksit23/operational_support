@@ -68,6 +68,10 @@ def detect(path: str | Path) -> tuple[DocType, str]:
         if looks_like_pnr(lines):
             return DocType.PNR, fmt
         joined = "\n".join(lines)
+        from .parsers.prep_letter import looks_like_prep_letter
+        from .normalize import clean_thai
+        if looks_like_prep_letter(clean_thai(joined[:3000])):
+            return DocType.PREP_LETTER, fmt
         if "确认" in joined or "地接" in joined or "导游" in joined:
             return DocType.LAND_CONFIRMATION, fmt
         if fmt == "docx" and len(joined.strip()) < 300 and _docx_images(path):

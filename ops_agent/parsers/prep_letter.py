@@ -26,7 +26,59 @@ OPTIONAL_RE = re.compile(r"OPTIONAL TOUR\s*:\s*(.+?)\s*ท่านละ\s*([\d
 CURRENCY = {"หยวน": "CNY", "RMB": "CNY", "CNY": "CNY", "บาท": "THB", "THB": "THB"}
 
 
+PAGE_BREAK = "\f"
+W_TYPE = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type"
+
+
+def _para_text(p) -> str:
+    out = []
+    for el in p.iter():
+        tag = el.tag.rsplit("}", 1)[-1]
+        if tag == "t":
+            out.append(el.text or "")
+        elif tag == "tab":
+            out.append(" ")
+        elif tag in ("br", "cr") and el.get(W_TYPE) != "page":
+            out.append("\n")
+    return "".join(out)
+
+
+def _docx_pages(path: str | Path) -> list[str]:
+    """A Word preparation letter as page texts laid out like the PDF's text layer."""
+    import docx
+    body = docx.Document(str(path)).element.body
+    lines: list[str] = []
+    for el in body.iterchildren():  # paragraphs and tables in document order
+        tag = el.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            if any(b.tag.endswith("}br") and b.get(W_TYPE) == "page" for b in el.iter()):
+                lines.append(PAGE_BREAK)
+            lines.append(_para_text(el))
+        elif tag == "tbl":
+            for tr in (e for e in el.iter() if e.tag.endswith("}tr")):
+                cells = ["\n".join(_para_text(p) for p in tc.iter() if p.tag.endswith("}p")).strip()
+                         for tc in tr if tc.tag.endswith("}tc")]
+                cells = [c for c in cells if c]
+                if any("\n" in c for c in cells):
+                    lines.extend(cells)  # multi-line cells read top to bottom, as in the PDF
+                else:
+                    lines.append("  ".join(cells))
+    pages = "\n".join(lines).split(PAGE_BREAK)
+    return [clean_thai(p.strip("\n")) for p in pages if p.strip()] or [""]
+
+
+def is_docx(path: str | Path) -> bool:
+    import zipfile
+    try:
+        with zipfile.ZipFile(str(path)) as z:
+            return "word/document.xml" in z.namelist()
+    except (zipfile.BadZipFile, OSError):
+        return False
+
+
 def page_texts(path: str | Path) -> list[str]:
+    if is_docx(path):
+        return _docx_pages(path)
     doc = pdfium.PdfDocument(str(path))
     try:
         return [clean_thai(doc[i].get_textpage().get_text_range().replace("\r\n", "\n")) for i in range(len(doc))]
@@ -127,6 +179,8 @@ def parse_prep_letter(path: str | Path, display_name: str | None = None) -> Prep
         h0 = len(lines)
     i = h0
     while i < len(lines):
+        if lines[i].startswith("ป้ายต้อนรับ"):
+            break  # end of the hotel table (a Word letter has no page break before the itinerary)
         hl = HOTEL_LINE_RE.match(lines[i])
         if hl:
             # "26 ต.ค. 69" alone, or "26-29 ต.ค. 69 REZEN JUNDUN HOTEL ..." (a range and the name on one line)
