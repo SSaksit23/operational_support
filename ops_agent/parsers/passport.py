@@ -198,13 +198,12 @@ def _vision_lines(image) -> list[str]:
     try:
         import google.auth
         from google.auth.transport.requests import AuthorizedSession
-        creds, project = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
         buf = io.BytesIO()
         image.convert("RGB").save(buf, "JPEG", quality=90)
         body = {"requests": [{"image": {"content": base64.b64encode(buf.getvalue()).decode()},
                               "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]}
-        headers = {"x-goog-user-project": project} if project else {}
-        r = AuthorizedSession(creds).post(VISION_URL, json=body, headers=headers, timeout=40)
+        r = AuthorizedSession(creds).post(VISION_URL, json=body, timeout=40)
         r.raise_for_status()
         res = r.json()["responses"][0]
         if "error" in res:
