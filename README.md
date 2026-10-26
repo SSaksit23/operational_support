@@ -26,6 +26,7 @@ Optional settings come from environment variables, or from `.env.ops` / `.env.lo
 | `OPS_AGENT_KEY` | Fernet key that encrypts passport and ID numbers. Back it up |
 | `OPS_FIREBASE_PROJECT`, `OPS_FIREBASE_WEB_CONFIG`, `OPS_ALLOWED_EMAILS`, `OPS_ALLOWED_DOMAINS` | Google sign-in for the hosted app (off when unset) |
 | `OPS_OCR_THREADS` | Cap OCR threads (the hosted app uses 2 of 4 CPUs) |
+| `OPS_VISION` | `1` sends passport pages the local OCR cannot read to Google Cloud Vision (needs the Vision API enabled in the project) |
 | `OPS_FONT_CSS` | Web-font stylesheet URL |
 
 ## Hosting

@@ -101,3 +101,17 @@ def test_mrz_ocr_slips():
     l2 = _line2("AD1234567", "44<<<<", "F", "281102")
     s = parse_mrz("PKTHATESTER<<YEARONLY<KKKKK<<<<", l2.replace("<<<<", "<<<", 1), _src("x"))
     assert (s.surname, s.given_name, s.passport_no, s.dob) == ("TESTER", "YEARONLY", "AD1234567", None) and s.checks_ok
+
+
+def test_vision_backup_reads_a_blank_page(tmp_path, monkeypatch):
+    """A page the local OCR cannot read goes to Cloud Vision when OPS_VISION is on."""
+    from PIL import Image
+    from ops_agent.parsers import passport as P
+    blank = tmp_path / "blank.png"
+    Image.new("RGB", (1200, 900), "white").save(blank)
+    monkeypatch.setattr(P, "_vision_lines", lambda img: ["noise", L1, L2.replace("<", "< ", 1)])
+    monkeypatch.delenv("OPS_VISION", raising=False)
+    assert P._read_passports(blank, "blank.png", "image") == []
+    monkeypatch.setenv("OPS_VISION", "1")
+    scans = P._read_passports(blank, "blank.png", "image")
+    assert [(s.passport_no, s.checks_ok) for s in scans] == [("AA1234567", True)]

@@ -182,6 +182,39 @@ def _ocr_lines(image) -> list[str]:
     return [t for _, _, t in _ocr_rows(image)]
 
 
+VISION_URL = "https://vision.googleapis.com/v1/images:annotate"
+
+
+def _vision_enabled() -> bool:
+    return os.environ.get("OPS_VISION", "").lower() in ("1", "true", "yes")
+
+
+def _vision_lines(image) -> list[str]:
+    """Google Cloud Vision text detection, the backup for pages the local OCR cannot read.
+    Uses the server's Google credentials (the Cloud Run service account). Never raises."""
+    import base64
+    import io
+    import logging
+    try:
+        import google.auth
+        from google.auth.transport.requests import AuthorizedSession
+        creds, project = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        buf = io.BytesIO()
+        image.convert("RGB").save(buf, "JPEG", quality=90)
+        body = {"requests": [{"image": {"content": base64.b64encode(buf.getvalue()).decode()},
+                              "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]}]}
+        headers = {"x-goog-user-project": project} if project else {}
+        r = AuthorizedSession(creds).post(VISION_URL, json=body, headers=headers, timeout=40)
+        r.raise_for_status()
+        res = r.json()["responses"][0]
+        if "error" in res:
+            raise RuntimeError(res["error"].get("message"))
+        return (res.get("fullTextAnnotation") or {}).get("text", "").splitlines()
+    except Exception as e:  # the local reading stands
+        logging.getLogger(__name__).warning("Cloud Vision failed: %s", e)
+        return []
+
+
 def _is_line2(text: str) -> bool:
     t = re.sub(r"[^A-Z0-9<]", "", text.upper())
     return len(t) >= 40 and t.count("<") >= 5 and bool(re.search(r"\d{6}", t)) and not t.startswith("P<")
@@ -298,5 +331,9 @@ def _read_passports(path: Path, display_name: str, fmt: str) -> list[PassportSca
                 band = img.crop((0, top, w, bottom))
                 band = ImageOps.expand(band.resize((band.width * 2, band.height * 2)), border=60, fill="white")
                 found += find_mrz(_ocr_lines(band), src)
+        # Still unsure (nothing read, a check digit failing, or only one passport on a page that
+        # may hold two): ask Cloud Vision when it is switched on, and keep the best reading.
+        if _vision_enabled() and (sum(s.checks_ok for s in found) < 2 or not all(s.checks_ok for s in found)):
+            found += find_mrz(_vision_lines(img), src)
         out += _best_each(found)
     return out
