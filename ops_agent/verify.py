@@ -621,12 +621,16 @@ def match_scans(passengers, scans, min_ratio: float = 0.8) -> dict:
 
 
 def _repair_separator(sc, p) -> None:
-    """The '<<' between surname and given name is often read as 'K' or 'KK' ("TESTSURNAMEKMALI").
-    When the passenger's own name explains the reading exactly, split it the same way."""
-    if getattr(sc, "given_name", None) != "" or not p.surname or not p.given_name:
+    """OCR often reads the MRZ filler '<' as 'K': the '<<' between surname and given name
+    ("TESTER<<KMALIK") and the run of fillers after the name ("MALIKKKK").
+    When the passenger's own name explains the reading with only extra K's in those places,
+    take the name from the name list."""
+    if not hasattr(sc, "given_name") or not p.surname or not p.given_name:
         return
     sur, given = _letters(p.surname), _letters(p.given_name)
-    if re.fullmatch(re.escape(sur) + "K{1,2}" + re.escape(given), _letters(sc.surname)):
+    read = _letters(sc.surname) + _letters(sc.given_name)
+    if (sc.surname, sc.given_name) != (sur, given) and \
+            re.fullmatch(re.escape(sur) + "K{0,2}" + re.escape(given) + "K*", read):
         sc.surname, sc.given_name = p.surname.upper(), p.given_name.upper()
 
 

@@ -130,3 +130,15 @@ def test_separator_read_as_k():
     sc = PassportScan(surname="TESTSURNAMEKMALI", given_name="", passport_no="AB7654321", checks_ok=True, source=_src("p.pdf"))
     match_scans([p], [sc])
     assert (sc.surname, sc.given_name) == ("TESTSURNAME", "MALI")
+
+
+def test_fillers_read_as_k():
+    from ops_agent.verify import match_scans
+    src = _src("NAMELIST.xlsx", DocType.NAME_LIST)
+    p = Passenger(given_name="MALIK", surname="TESTER", passport_no="AB7654321", source=src)
+    sc = PassportScan(surname="TESTER", given_name="KMALIKKKK", passport_no="AB7654321", checks_ok=True, source=_src("p.pdf"))
+    match_scans([p], [sc])
+    assert (sc.surname, sc.given_name) == ("TESTER", "MALIK")
+    other = PassportScan(surname="TESTER", given_name="MALEE", passport_no="AB7654321", checks_ok=True, source=_src("p.pdf"))
+    match_scans([p], [other])
+    assert other.given_name == "MALEE"  # a real difference stays
