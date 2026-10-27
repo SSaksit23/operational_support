@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ops_agent.models import DocType, GroupBundle, NameListDoc, Passenger, SourceRef
+from ops_agent.models import DocType, GroupBundle, NameListDoc, Passenger, PassportScan, SourceRef
 from ops_agent.parsers.passport import check_digit, parse_mrz
 from ops_agent.verify import Settings, Verdict, check_passport_scans
 
@@ -115,3 +115,18 @@ def test_vision_backup_reads_a_blank_page(tmp_path, monkeypatch):
     monkeypatch.setenv("OPS_VISION", "1")
     scans = P._read_passports(blank, "blank.png", "image")
     assert [(s.passport_no, s.checks_ok) for s in scans] == [("AA1234567", True)]
+
+
+def test_line2_end_hidden_by_a_signature():
+    """Only the first 28 characters of line 2 are legible: those fields still count (own check digits)."""
+    sc = parse_mrz(L1, L2[:28] + "9938号XX", _src("p.pdf"))
+    assert (sc.passport_no, sc.dob, sc.expiry, sc.checks_ok) == ("AA1234567", date(1985, 4, 12), date(2031, 1, 1), True)
+
+
+def test_separator_read_as_k():
+    from ops_agent.verify import match_scans
+    src = _src("NAMELIST.xlsx", DocType.NAME_LIST)
+    p = Passenger(given_name="MALI", surname="TESTSURNAME", passport_no="AB7654321", source=src)
+    sc = PassportScan(surname="TESTSURNAMEKMALI", given_name="", passport_no="AB7654321", checks_ok=True, source=_src("p.pdf"))
+    match_scans([p], [sc])
+    assert (sc.surname, sc.given_name) == ("TESTSURNAME", "MALI")

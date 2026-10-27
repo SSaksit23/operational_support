@@ -23,6 +23,9 @@ WEIGHTS = (7, 3, 1)
 LINE1_RE = re.compile(r"P[A-Z0-9<]([A-Z<]{3})([A-Z<]{8,41})")
 # Birth date may be partly unknown on Thai passports ("44<<<<": year only), so it allows "<".
 LINE2_RE = re.compile(r"([A-Z0-9<]{9})([0-9<])([A-Z<]{3})([0-9<]{6})([0-9<])([MF<X])(\d{6})(\d)([A-Z0-9<]{14})([0-9<])(\d)")
+# The first 28 characters only, for a line whose end is hidden (a signature or stamp across it).
+# Each of these fields carries its own check digit, so they can still be trusted one by one.
+LINE2_HEAD_RE = re.compile(r"([A-Z0-9<]{9})([0-9<])([A-Z<]{3})([0-9<]{6})([0-9<])([MF<X])(\d{6})(\d)")
 
 
 def check_digit(s: str) -> int:
@@ -82,8 +85,11 @@ def _parse_mrz(line1: str, line2: str, source: SourceRef) -> Optional[PassportSc
     # numeric fields: OCR often reads 0 as O, 1 as I
     l2 = l2[:9] + _fix_digits(l2[9:10]) + l2[10:13] + _fix_digits(l2[13:27]) + l2[27:42] + _fix_digits(l2[42:44])
     m2 = LINE2_RE.search(l2)
-    if not m2:
-        return None
+    head_only = m2 is None
+    if head_only:
+        m2 = LINE2_HEAD_RE.match(l2)
+        if not m2:
+            return None
     # The '<' after the type letter dropped ("PTHASUMA..."): realign on the nationality from line 2.
     nat2 = m2.group(3)
     if m1.group(1) != nat2 and l1[m1.start() + 1:m1.start() + 4] == nat2:
@@ -93,13 +99,16 @@ def _parse_mrz(line1: str, line2: str, source: SourceRef) -> Optional[PassportSc
     if "<<" not in names and "<" in names:
         names = names.replace("<", "<<", 1)  # the name separator read as a single '<'
     surname, _, given = names.partition("<<")
-    pno, pno_cd, nat, dob, dob_cd, sex, exp, exp_cd, personal, pers_cd, final_cd = m2.groups()
+    pno, pno_cd, nat, dob, dob_cd, sex, exp, exp_cd, personal, pers_cd, final_cd = (m2.groups() + (None,) * 3)[:11]
     ok_no = check_digit(pno) == int(pno_cd) if pno_cd.isdigit() else False
     ok_dob = dob_cd.isdigit() and check_digit(dob) == int(dob_cd)
     ok_exp = check_digit(exp) == int(exp_cd)
-    composite = pno + pno_cd + dob + dob_cd + exp + exp_cd + personal + pers_cd
-    ok_all = check_digit(composite) == int(final_cd)
-    if "<" in dob and ok_all:
+    if head_only:
+        ok_all = True  # the composite digit is hidden: trust the three field check digits alone
+    else:
+        composite = pno + pno_cd + dob + dob_cd + exp + exp_cd + personal + pers_cd
+        ok_all = check_digit(composite) == int(final_cd)
+    if "<" in dob and ok_all and not head_only:
         ok_dob = True  # an unknown birth date on the passport itself, not an OCR fault
     return PassportScan(
         surname=surname.replace("<", " ").strip(), given_name=given.replace("<", " ").strip(),
@@ -114,7 +123,7 @@ def find_mrz(lines: list[str], source: SourceRef) -> list[PassportScan]:
     clean = [re.sub(r"[^A-Z0-9<«]", "", ln.upper().replace(" ", "")) for ln in lines]
     out = []
     for i in range(len(clean) - 1):
-        if clean[i].startswith("P") and "<<" in clean[i] and len(clean[i]) >= 15 and len(clean[i + 1]) >= 40:
+        if clean[i].startswith("P") and "<<" in clean[i] and len(clean[i]) >= 15 and len(clean[i + 1]) >= 28:
             scan = parse_mrz(clean[i], clean[i + 1], source)
             if scan:
                 out.append(scan)

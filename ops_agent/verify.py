@@ -12,6 +12,7 @@ whether two documents agree.
 
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 from difflib import SequenceMatcher
@@ -178,9 +179,13 @@ def check_dates(b: GroupBundle, s: Settings) -> list[Finding]:
     for direction, expected in (("outbound", start), ("return", end)):
         f = fl.get(f"flights.{direction}")
         if f and f.accepted_value:
-            leg_date = next(leg.date for _, leg, p in sorted(_flight_sources(b), key=lambda x: x[2])
-                            if _direction(leg, "BKK") == direction)
-            if leg_date != expected:
+            leg = next(leg for _, leg, p in sorted(_flight_sources(b), key=lambda x: x[2])
+                       if _direction(leg, "BKK") == direction)
+            leg_date = leg.date
+            # A flight just after midnight belongs to the evening before: the group meets that night.
+            after_midnight = direction == "outbound" and leg_date and expected and \
+                leg_date - expected == timedelta(days=1) and (leg.dep_time or "99") < "06:00"
+            if leg_date != expected and not after_midnight:
                 problems.append(f"{direction} flight is on {leg_date}, trip says {expected}")
     if problems:
         return [Finding(rule="dates.trip", verdict=Verdict.INCORRECT, title="Travel dates disagree",
@@ -609,7 +614,20 @@ def match_scans(passengers, scans, min_ratio: float = 0.8) -> dict:
         if pid not in out and id(sc) not in used:
             out[pid] = sc
             used.add(id(sc))
+    for p in passengers:
+        if id(p) in out:
+            _repair_separator(out[id(p)], p)
     return out
+
+
+def _repair_separator(sc, p) -> None:
+    """The '<<' between surname and given name is often read as 'K' or 'KK' ("TESTSURNAMEKMALI").
+    When the passenger's own name explains the reading exactly, split it the same way."""
+    if getattr(sc, "given_name", None) != "" or not p.surname or not p.given_name:
+        return
+    sur, given = _letters(p.surname), _letters(p.given_name)
+    if re.fullmatch(re.escape(sur) + "K{1,2}" + re.escape(given), _letters(sc.surname)):
+        sc.surname, sc.given_name = p.surname.upper(), p.given_name.upper()
 
 
 def check_passport_scans(b: GroupBundle, s: Settings) -> list[Finding]:

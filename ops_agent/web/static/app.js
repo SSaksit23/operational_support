@@ -28,7 +28,37 @@ async function patient(path, opts, tries = 8) {
     catch (e) { if (k >= tries || ![429, 502, 503, 504].includes(e.status)) throw e; await sleep(2000 + k * 1500); }
   }
 }
+// Word files with big pictures (a preparation letter full of photos) can push an upload past the
+// server's 32 MB request limit. Only the text of such a file is read, so its pictures are swapped
+// for a 1-pixel image before upload. Word files of pasted passport scans (little text) are left whole.
+const TINY_PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), (c) => c.charCodeAt(0));
+const MAX_UPLOAD = 30 * 1024 * 1024;
+async function shrinkDocx(file) {
+  if (!/\.docx$/i.test(file.name) || file.size < 4 * 1024 * 1024) return file;
+  try {
+    if (!window.JSZip) await loadScript("vendor/jszip.min.js");
+    const zip = await JSZip.loadAsync(file);
+    const doc = zip.file("word/document.xml");
+    const text = doc ? (await doc.async("string")).replace(/<[^>]+>/g, "") : "";
+    if (text.trim().length < 300) return file; // pasted passport scans: the pictures are the content
+    zip.folder("word/media").forEach((path) => zip.file("word/media/" + path, TINY_PNG));
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+    return new File([blob], file.name, { type: file.type });
+  } catch (e) { return file; }
+}
+async function slim(fd) {
+  const out = new FormData();
+  let total = 0;
+  for (const [k, v] of fd.entries()) {
+    const f = v instanceof File ? await shrinkDocx(v) : v;
+    total += f.size || 0;
+    out.append(k, f, f.name);
+  }
+  if (total > MAX_UPLOAD) throw new Error(`ไฟล์รวมกันใหญ่เกินไป (${(total / 1048576).toFixed(0)} MB, สูงสุด 30 MB) ลองแยกตรวจทีละชุด`);
+  return out;
+}
 async function checkFiles(fd, statusEl) {
+  fd = await slim(fd);
   let j = await (await patient("/api/groups/check?background=1", { method: "POST", body: fd })).json();
   const id = j.job, t0 = Date.now();
   while (j.status === "running") {
